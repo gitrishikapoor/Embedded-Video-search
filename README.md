@@ -102,16 +102,22 @@ CREATE TABLE Videos (
 CREATE INDEX Idx_Videos_Status_CreatedAt ON Videos(status, created_at DESC);
 ```
 
----
+## 🛠️ Getting Started & Deployment
 
-## ☁️ Active Google Cloud Configuration (Enterprise Edition)
+### 1. Clone the Repository
+```bash
+git clone https://github.com/gitrishikapoor/Embedded-Video-search.git
+cd Embedded-Video-search
+```
 
+### 2. Configure Environment Variables
+Create a `.env` file in the root directory with the following variables:
 ```env
-GOOGLE_CLOUD_PROJECT=rk-vpc-host-prod-333313
-GOOGLE_CLOUD_LOCATION=us-west1
-GCS_BUCKET_NAME=rk-video-search-media-bucket
-SPANNER_INSTANCE_ID=properties  # Enterprise Edition: Property Graph Database
-SPANNER_DATABASE_ID=videosearch
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+GCS_BUCKET_NAME=your-gcs-bucket-name
+SPANNER_INSTANCE_ID=your-spanner-instance
+SPANNER_DATABASE_ID=your-spanner-database
 USE_MOCK_GCP=false
 ```
 

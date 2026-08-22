@@ -21,15 +21,15 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # GCP Infrastructure Settings
-    GCP_PROJECT_ID: str = os.getenv("GOOGLE_CLOUD_PROJECT", "rk-vpc-host-prod-333313")
-    GCP_REGION: str = os.getenv("GOOGLE_CLOUD_LOCATION", "us-west1")
+    GCP_PROJECT_ID: str = os.getenv("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id")
+    GCP_REGION: str = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     
     # Cloud Storage Settings
-    GCS_BUCKET_NAME: str = os.getenv("GCS_BUCKET_NAME", "rk-video-search-media-bucket")
+    GCS_BUCKET_NAME: str = os.getenv("GCS_BUCKET_NAME", "your-gcs-bucket-name")
     
     # Cloud Spanner Settings (Enterprise Edition: Property Graph Database)
-    SPANNER_INSTANCE_ID: str = os.getenv("SPANNER_INSTANCE_ID", "properties")
-    SPANNER_DATABASE_ID: str = os.getenv("SPANNER_DATABASE_ID", "videosearch")
+    SPANNER_INSTANCE_ID: str = os.getenv("SPANNER_INSTANCE_ID", "your-spanner-instance")
+    SPANNER_DATABASE_ID: str = os.getenv("SPANNER_DATABASE_ID", "your-spanner-database")
     SPANNER_TABLE_NAME: str = "Videos"
     
     # Vertex AI Multimodal Embeddings Settings
