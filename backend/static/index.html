@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Vector Search AI | GCS + Vertex AI + Cloud Spanner</title>
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            },
+            spanner: {
+              500: '#4285F4',
+              600: '#1a73e8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .animate-pulse-subtle { animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-slate-950/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="video" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold text-white tracking-tight">Video Vector Search</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Vertex AI & Spanner</span>
+          </div>
+          <p class="text-xs text-slate-400">Multimodal Embeddings + Cloud Spanner Vector Search</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center space-x-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+        <button onclick="switchTab('user')" id="tab-btn-user" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all bg-indigo-600 text-white shadow">
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>User Search</span>
+        </button>
+        <button onclick="switchTab('admin')" id="tab-btn-admin" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800">
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+          <span>Admin Ingestion</span>
+        </button>
+        <button onclick="switchTab('spanner')" id="tab-btn-spanner" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800">
+          <i data-lucide="database" class="w-4 h-4"></i>
+          <span>Spanner Inspector</span>
+        </button>
+      </nav>
+
+      <!-- Mode & Stats Badge -->
+      <div class="flex items-center space-x-3">
+        <div id="mode-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="mode-text">Mock / Demo Mode</span>
+        </div>
+        <button onclick="openConfigModal()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="GCP Settings">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
+
+    <!-- =================================================================== -->
+    <!-- FACET 1: USER SEARCH PORTAL -->
+    <!-- =================================================================== -->
+    <section id="facet-user" class="space-y-8 block">
+      <!-- Search Hero Banner -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-900/30 p-8 text-center">
+        <div class="max-w-3xl mx-auto space-y-4">
+          <span class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Vertex AI Multimodal Text-to-Video Retrieval</span>
+          </span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+            Find Any Video Scene with <span class="bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">Natural Language</span>
+          </h2>
+          <p class="text-sm sm:text-base text-slate-400">
+            Queries are converted to 1408-dimensional multimodal vectors and compared in real-time against Cloud Spanner video embeddings using <code class="text-indigo-300 bg-indigo-950/80 px-1.5 py-0.5 rounded">COSINE_DISTANCE</code>.
+          </p>
+
+          <!-- Search Input Box -->
+          <div class="pt-4 max-w-2xl mx-auto">
+            <form onsubmit="handleSearch(event)" class="relative flex items-center">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i data-lucide="search" class="w-5 h-5 text-indigo-400"></i>
+              </div>
+              <input 
+                type="text" 
+                id="search-query"
+                placeholder="Try: 'golden retriever playing with a ball' or 'ocean waves at sunset'..."
+                class="w-full pl-12 pr-32 py-4 bg-slate-950 border-2 border-indigo-500/40 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 text-base shadow-2xl transition"
+                required
+              />
+              <button 
+                type="submit" 
+                id="search-btn"
+                class="absolute right-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-semibold text-sm shadow-md transition-all flex items-center space-x-2"
+              >
+                <span>Search</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </button>
+            </form>
+          </div>
+
+          <!-- Suggested Query Pills -->
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-3">
+            <span class="text-xs text-slate-500 font-medium">Quick Suggestions:</span>
+            <button onclick="setQuery('golden retriever puppy playing with ball')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🐕 Puppy Playing
+            </button>
+            <button onclick="setQuery('sunset over ocean waves and golden beach')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🌅 Ocean Sunset
+            </button>
+            <button onclick="setQuery('supercar drifting at high speed on wet asphalt')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🏎️ Supercar Drifting
+            </button>
+            <button onclick="setQuery('chef cooking fresh Italian pasta recipe')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🍝 Italian Pasta
+            </button>
+            <button onclick="setQuery('deep space nebula stars and spiral galaxy')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🌌 Deep Space Nebula
+            </button>
+            <button onclick="setQuery('software engineer coding cloud AI applications')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              💻 Software Engineer
+            </button>
+            <button onclick="setQuery('live rock band music concert electric guitar solo')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🎸 Rock Guitar Solo
+            </button>
+            <button onclick="setQuery('big wave surfer riding massive ocean barrel')" class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-indigo-900/50 text-slate-300 hover:text-indigo-300 border border-slate-700 transition">
+              🏄 Big Wave Surfing
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Filter Chips & Controls Bar -->
+      <div class="space-y-3">
+        <!-- Category Filter Tabs -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider mr-1">Filter Domain:</span>
+          <button onclick="filterCategory('all', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition">
+            🌟 All Categories (24)
+          </button>
+          <button onclick="filterCategory('dog,cat,pet,animals,panda,husky', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            🐾 Animals & Pets
+          </button>
+          <button onclick="filterCategory('ocean,waves,beach,waterfall,nature,mountains', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            🌊 Nature & Landscapes
+          </button>
+          <button onclick="filterCategory('car,racing,speed,drifting,sports,surfing,bike', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            🏎️ Sports & Action
+          </button>
+          <button onclick="filterCategory('cooking,food,pasta,sourdough,sushi,chocolate', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            🍝 Culinary & Food
+          </button>
+          <button onclick="filterCategory('space,galaxy,nebula,mars,eclipse,saturn', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            🌌 Space & Astronomy
+          </button>
+          <button onclick="filterCategory('coding,software,robotics,cyberpunk,ai', this)" class="cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            💻 Tech & Robotics
+          </button>
+        </div>
+
+        <!-- Filter Controls Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+          <div class="flex items-center space-x-6">
+            <!-- Minimum Similarity Slider -->
+            <div class="flex items-center space-x-3">
+              <span class="text-xs text-slate-400 font-medium">Min Match:</span>
+              <input 
+                type="range" 
+                id="similarity-threshold" 
+                min="0" 
+                max="80" 
+                value="0" 
+                oninput="document.getElementById('sim-val').innerText = this.value + '%'"
+                class="w-28 accent-indigo-500"
+              />
+              <span id="sim-val" class="text-xs font-mono font-semibold text-indigo-400">0%</span>
+            </div>
+
+            <!-- Top K selector -->
+            <div class="flex items-center space-x-2">
+              <span class="text-xs text-slate-400 font-medium">Results Count:</span>
+              <select id="top-k-select" class="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500">
+                <option value="4" selected>4 Videos (Default)</option>
+                <option value="8">8 Videos</option>
+                <option value="12">12 Videos</option>
+                <option value="16">16 Videos</option>
+                <option value="24">All Videos</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="search-metrics" class="text-xs text-slate-400 flex items-center space-x-2">
+            <span>Connected to Cloud Spanner: <code class="text-xs text-indigo-300">sampleinstance/videosearch</code></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Results Grid & Live Spanner Query Display -->
+      <div id="search-results-container" class="space-y-6">
+
+        <!-- Live Spanner SQL Query Box (Prominently displayed in app window) -->
+        <div id="spanner-query-box" class="rounded-2xl bg-slate-950 border border-slate-700/80 overflow-hidden shadow-2xl transition-all">
+          <div class="px-5 py-3.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-2.5">
+              <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50"></span>
+              <span class="text-xs font-bold text-white tracking-wide flex items-center space-x-2">
+                <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
+                <span>Cloud Spanner Studio Query (Copy & Paste Ready)</span>
+              </span>
+              <span id="query-dim-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-500/30 font-semibold">
+                1408-dim Float32 Vector
+              </span>
+              <span id="spanner-query-latency-pill" class="px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 flex items-center space-x-1.5 shadow-sm">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span>Spanner DB Query: <span id="spanner-latency-val" class="text-emerald-200 font-bold">0.0ms</span></span>
+              </span>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+              <div class="bg-slate-950 p-0.5 rounded-lg border border-slate-800 flex items-center">
+                <button onclick="toggleSqlView('studio')" id="btn-view-studio" class="px-3 py-1 rounded-md text-xs font-semibold bg-indigo-600 text-white transition shadow">
+                  Spanner Studio (Literal Vector)
+                </button>
+                <button onclick="toggleSqlView('param')" id="btn-view-param" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+                  Parameterized SQL
+                </button>
+              </div>
+              <button onclick="copySpannerStudioQuery()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-lg shadow-emerald-900/30 transition transform hover:-translate-y-0.5">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span id="copy-studio-btn-text">Copy Full Query</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs font-mono">
+            <!-- Left: Executed SQL in full width -->
+            <div class="lg:col-span-8 bg-black/80 rounded-xl p-4 border border-slate-800 overflow-x-auto max-h-72 overflow-y-auto relative group">
+              <button onclick="copySpannerStudioQuery()" class="absolute top-2 right-2 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono opacity-80 group-hover:opacity-100 transition shadow">
+                Copy
+              </button>
+              <pre id="spanner-sql-text" class="text-emerald-400 text-xs leading-relaxed whitespace-pre-wrap break-all select-all font-mono"></pre>
+            </div>
+
+            <!-- Right: Parameters & Vector Info -->
+            <div class="lg:col-span-4 bg-slate-900/60 rounded-xl p-4 border border-slate-800 space-y-3 text-[11px] flex flex-col justify-between">
+              <div class="space-y-2.5">
+                <div>
+                  <span class="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Cloud Spanner Target:</span>
+                  <span id="sql-target-db" class="text-emerald-300 font-mono font-bold">properties / videosearch</span>
+                </div>
+                <div>
+                  <span class="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Vector Preview (@query_embedding):</span>
+                  <span id="sql-query-vector-preview" class="text-indigo-300 font-mono text-[10px] break-all block">[0.0523, 0.0453, 0.0274, ...]</span>
+                </div>
+                <div>
+                  <span class="text-slate-500 font-semibold block uppercase tracking-wider text-[10px]">Distance Metric Function:</span>
+                  <span class="text-cyan-300 font-semibold">COSINE_DISTANCE (Similarity = 1 - Distance)</span>
+                </div>
+              </div>
+              
+              <div class="pt-2.5 border-t border-slate-800/80 text-[10px] text-slate-400 space-y-1 bg-slate-950/40 p-2.5 rounded-lg">
+                <span class="text-slate-300 font-semibold block">🚀 How to run in GCP Console:</span>
+                <span>1. Click <b>"Copy Full Query"</b> button above</span><br>
+                <span>2. Open Spanner Studio $\rightarrow$ paste into Query Editor</span><br>
+                <span>3. Click <b>Run</b> to execute vector search!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="results-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Empty / Initial Placeholder -->
+        <div id="empty-state" class="text-center py-16 px-4 rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950/40">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
+            <i data-lucide="clapperboard" class="w-8 h-8"></i>
+          </div>
+          <h3 class="text-lg font-semibold text-slate-200">No Search Performed Yet</h3>
+          <p class="text-sm text-slate-400 max-w-md mx-auto mt-1">
+            Enter a natural language description above, or click one of the quick suggestions to execute a Cloud Spanner vector query.
+          </p>
+          <div class="mt-6 flex justify-center space-x-3">
+            <button onclick="seedAndSearch()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow flex items-center space-x-2">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span>Seed Sample Videos & Search</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- FACET 2: ADMIN INGESTION PORTAL -->
+    <!-- =================================================================== -->
+    <section id="facet-admin" class="space-y-8 hidden">
+      <!-- Admin Header & Actions -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight">Admin Video Ingestion Studio</h2>
+          <p class="text-sm text-slate-400">
+            Upload video files to GCS bucket, generate Vertex AI multimodal vector embeddings, and save into Cloud Spanner.
+          </p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button onclick="seedSampleVideosAction()" class="px-4 py-2 rounded-xl bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-500/30 text-xs font-semibold flex items-center space-x-2 transition">
+            <i data-lucide="database" class="w-4 h-4"></i>
+            <span>Seed Curated Sample Videos</span>
+          </button>
+          <button onclick="fetchAdminVideos()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Refresh Table">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload Box & Pipeline Visualizer -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Upload Form -->
+        <div class="lg:col-span-7 bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-5">
+          <h3 class="text-base font-semibold text-white flex items-center space-x-2">
+            <i data-lucide="upload" class="w-5 h-5 text-indigo-400"></i>
+            <span>Upload New Video to GCS</span>
+          </h3>
+
+          <form id="upload-form" onsubmit="handleUpload(event)" class="space-y-4">
+            <!-- Dropzone -->
+            <div 
+              id="drop-zone"
+              onclick="document.getElementById('video-file-input').click()"
+              class="border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-950/60 hover:bg-indigo-950/20 rounded-xl p-6 text-center cursor-pointer transition"
+            >
+              <input type="file" id="video-file-input" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="handleFileSelected(this)">
+              <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-3 text-indigo-400">
+                <i data-lucide="film" class="w-6 h-6"></i>
+              </div>
+              <p id="file-label-main" class="text-sm font-medium text-slate-200">Click to browse or drag & drop video file</p>
+              <p id="file-label-sub" class="text-xs text-slate-500 mt-1">Supports MP4, WebM, MOV (Max 100MB)</p>
+            </div>
+
+            <!-- Title & Duration -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-300 mb-1">Video Title *</label>
+                <input 
+                  type="text" 
+                  id="upload-title" 
+                  placeholder="e.g. Golden Retriever Puppy in Park" 
+                  required
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Duration (sec)</label>
+                <input 
+                  type="number" 
+                  id="upload-duration" 
+                  value="15" 
+                  step="0.5"
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Scene Description / Metadata Context</label>
+              <textarea 
+                id="upload-desc" 
+                rows="2" 
+                placeholder="Detailed description of visual actions, objects, and setting..."
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+              ></textarea>
+            </div>
+
+            <!-- Tags -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Tags (Comma Separated)</label>
+              <input 
+                type="text" 
+                id="upload-tags" 
+                placeholder="dog, puppy, pet, playing, park"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              id="upload-submit-btn"
+              class="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-semibold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center space-x-2"
+            >
+              <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+              <span>Upload to GCS & Index to Spanner</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Ingestion Pipeline Architecture Flow -->
+        <div class="lg:col-span-5 bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-4 flex flex-col justify-between">
+          <div>
+            <h3 class="text-base font-semibold text-white flex items-center space-x-2">
+              <i data-lucide="workflow" class="w-5 h-5 text-indigo-400"></i>
+              <span>Ingestion Pipeline Architecture</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">
+              Automated multi-stage asynchronous processing triggered upon video upload.
+            </p>
+
+            <div class="mt-6 space-y-4">
+              <!-- Step 1 -->
+              <div class="flex items-start space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 font-bold text-xs">1</div>
+                <div>
+                  <h4 class="text-xs font-semibold text-white">Google Cloud Storage (GCS)</h4>
+                  <p class="text-xs text-slate-400">Uploads MP4 blob to <code class="text-indigo-300">gs://bucket/videos/{id}.mp4</code> and issues streaming signed URLs.</p>
+                </div>
+              </div>
+
+              <!-- Step 2 -->
+              <div class="flex items-start space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold text-xs">2</div>
+                <div>
+                  <h4 class="text-xs font-semibold text-white">Vertex AI Multimodal Embeddings</h4>
+                  <p class="text-xs text-slate-400">Extracts 1408-dimensional dense semantic vector from video frames via <code class="text-indigo-300">multimodalembedding@001</code>.</p>
+                </div>
+              </div>
+
+              <!-- Step 3 -->
+              <div class="flex items-start space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 font-bold text-xs">3</div>
+                <div>
+                  <h4 class="text-xs font-semibold text-white">Cloud Spanner Vector Store</h4>
+                  <p class="text-xs text-slate-400">Stores video metadata & <code class="text-emerald-300">ARRAY&lt;FLOAT32&gt;(1408)</code> vector with KNN cosine search capability.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Box -->
+          <div id="upload-status-box" class="hidden p-4 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-xs text-indigo-300 space-y-1">
+            <div class="flex items-center space-x-2 font-semibold text-white">
+              <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+              <span id="upload-status-title">Processing Ingestion...</span>
+            </div>
+            <p id="upload-status-desc" class="text-slate-300">Generating Vertex AI multimodal embedding and indexing in Cloud Spanner.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spanner Video Inventory Table -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden">
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-semibold text-white">Indexed Video Inventory (Cloud Spanner)</h3>
+            <p class="text-xs text-slate-400">All registered videos, GCS URIs, and vector embedding status.</p>
+          </div>
+          <span id="admin-video-count-badge" class="px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono text-indigo-300">0 Videos</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Video & Metadata</th>
+                <th class="py-3 px-4">GCS Destination</th>
+                <th class="py-3 px-4">Embedding Vector (1408-d)</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-videos-tbody" class="divide-y divide-slate-800">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- FACET 3: CLOUD SPANNER INSPECTOR & VECTOR EXPLORER -->
+    <!-- =================================================================== -->
+    <section id="facet-spanner" class="space-y-8 hidden">
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Cloud Spanner Database & Vector Engine</h2>
+        <p class="text-sm text-slate-400">Inspect the Cloud Spanner table DDL, schema, vector indexing statistics, and executed SQL query structure.</p>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <span class="text-xs text-slate-400 font-medium">Total Videos in Spanner</span>
+          <p id="stat-total" class="text-2xl font-bold text-white mt-1">0</p>
+          <span class="text-xs text-emerald-400 flex items-center mt-2">
+            <i data-lucide="check" class="w-3.5 h-3.5 mr-1"></i>
+            <span id="stat-indexed">0</span> Indexed Vectors
+          </span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <span class="text-xs text-slate-400 font-medium">Vector Dimensionality</span>
+          <p class="text-2xl font-bold text-indigo-400 mt-1">1408 <span class="text-xs font-normal text-slate-400">floats / video</span></p>
+          <span class="text-xs text-slate-400 flex items-center mt-2">
+            <i data-lucide="layers" class="w-3.5 h-3.5 mr-1"></i>
+            ARRAY&lt;FLOAT32&gt;
+          </span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <span class="text-xs text-slate-400 font-medium">Spanner Database</span>
+          <p id="stat-db-name" class="text-base font-semibold text-white mt-1 font-mono truncate">video-search-db</p>
+          <span class="text-xs text-slate-400 flex items-center mt-2">
+            <i data-lucide="server" class="w-3.5 h-3.5 mr-1"></i>
+            Instance: <span id="stat-instance-name" class="ml-1 font-mono">video-search-instance</span>
+          </span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <span class="text-xs text-slate-400 font-medium">Distance Metric</span>
+          <p class="text-2xl font-bold text-cyan-400 mt-1">COSINE</p>
+          <span class="text-xs text-slate-400 flex items-center mt-2">
+            <i data-lucide="compass" class="w-3.5 h-3.5 mr-1"></i>
+            1.0 - COSINE_DISTANCE(u, v)
+          </span>
+        </div>
+      </div>
+
+      <!-- SQL & DDL Inspection Code Blocks -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Spanner DDL Schema -->
+        <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="px-5 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="file-code" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-xs font-semibold text-white font-mono">Cloud Spanner Table DDL</span>
+            </div>
+            <span class="text-xs text-slate-400">GoogleSQL</span>
+          </div>
+          <pre class="p-4 text-xs font-mono text-indigo-300 overflow-x-auto leading-relaxed"><code>CREATE TABLE Videos (
+    video_id STRING(64) NOT NULL,
+    title STRING(256) NOT NULL,
+    description STRING(MAX),
+    tags ARRAY&lt;STRING(64)&gt;,
+    gcs_uri STRING(1024) NOT NULL,
+    gcs_bucket STRING(256) NOT NULL,
+    gcs_object_name STRING(512) NOT NULL,
+    content_type STRING(64) NOT NULL,
+    duration_seconds FLOAT64,
+    file_size_bytes INT64,
+    embedding ARRAY&lt;FLOAT32&gt;(1408),
+    embedding_model STRING(64) NOT NULL,
+    status STRING(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
+    updated_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true)
+) PRIMARY KEY (video_id);</code></pre>
+        </div>
+
+        <!-- Spanner Vector Search Query -->
+        <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="px-5 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i>
+              <span class="text-xs font-semibold text-white font-mono">Spanner Vector Search Query</span>
+            </div>
+            <span class="text-xs text-slate-400">GoogleSQL</span>
+          </div>
+          <pre class="p-4 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed"><code>SELECT 
+    video_id,
+    title,
+    description,
+    tags,
+    gcs_uri,
+    duration_seconds,
+    COSINE_DISTANCE(embedding, @query_embedding) AS distance,
+    (1.0 - COSINE_DISTANCE(embedding, @query_embedding)) AS similarity_score
+FROM Videos
+WHERE status = 'INDEXED'
+ORDER BY distance ASC
+LIMIT @top_k;</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- VIDEO PLAYER MODAL -->
+  <div id="video-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <h3 id="modal-video-title" class="text-base font-semibold text-white truncate max-w-lg">Video Playback</h3>
+        <button onclick="closeVideoModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="bg-black aspect-video flex items-center justify-center">
+        <video id="modal-video-player" controls autoplay class="w-full h-full object-contain"></video>
+      </div>
+      <div class="p-4 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
+        <span id="modal-gcs-uri" class="font-mono text-indigo-300 truncate max-w-md">gs://...</span>
+        <a id="modal-direct-link" href="#" target="_blank" class="text-indigo-400 hover:underline flex items-center space-x-1">
+          <span>Open Direct</span>
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG MODAL -->
+  <div id="config-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold text-white flex items-center space-x-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-indigo-400"></i>
+          <span>GCP Environment Settings</span>
+        </h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleSaveConfig(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">GCP Project ID</label>
+          <input type="text" id="cfg-project" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">GCS Bucket Name</label>
+          <input type="text" id="cfg-bucket" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Spanner Instance ID</label>
+          <input type="text" id="cfg-spanner-instance" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Spanner Database ID</label>
+          <input type="text" id="cfg-spanner-db" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono">
+        </div>
+        <div class="flex items-center justify-between pt-2">
+          <label class="text-slate-300 font-medium">Use Local Mock Engine</label>
+          <input type="checkbox" id="cfg-mock" class="w-4 h-4 accent-indigo-500 rounded">
+        </div>
+        <div class="pt-4 flex space-x-3">
+          <button type="button" onclick="closeConfigModal()" class="w-1/2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium">Cancel</button>
+          <button type="submit" class="w-1/2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-950 border-t border-slate-900 py-6 text-center text-xs text-slate-500">
+    <p>Video Vector Search App • Built with FastAPI, Google Cloud Storage, Vertex AI Multimodal Embeddings, and Cloud Spanner Vector Search</p>
+  </footer>
+
+  <!-- APPLICATION LOGIC SCRIPT -->
+  <script>
+    // State
+    let currentConfig = null;
+    let selectedFile = null;
+
+    // Initialize UI on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await fetchConfig();
+      await fetchStats();
+      await fetchAdminVideos();
+      // Auto-populate initial search if database has videos
+      const stats = await (await fetch('/api/admin/stats')).json();
+      if (stats.total_videos === 0) {
+        // Auto-seed sample videos for rich first load
+        await seedSampleVideosAction(false);
+      } else {
+        // Initial search demo
+        setQuery('Children playing together');
+      }
+    });
+
+    function switchTab(tabName) {
+      ['user', 'admin', 'spanner'].forEach(t => {
+        const sec = document.getElementById(`facet-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === tabName) {
+          sec.classList.remove('hidden');
+          sec.classList.add('block');
+          btn.className = 'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all bg-indigo-600 text-white shadow';
+        } else {
+          sec.classList.add('hidden');
+          sec.classList.remove('block');
+          btn.className = 'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-800';
+        }
+      });
+      lucide.createIcons();
+      if (tabName === 'admin') fetchAdminVideos();
+      if (tabName === 'spanner') fetchStats();
+    }
+
+    async function fetchConfig() {
+      try {
+        const res = await fetch('/api/admin/config');
+        currentConfig = await res.json();
+        const modeBadge = document.getElementById('mode-badge');
+        const modeText = document.getElementById('mode-text');
+        if (currentConfig.use_mock_gcp) {
+          modeText.innerText = 'Mock / Demo Mode';
+          modeBadge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-medium';
+        } else {
+          modeText.innerText = `Live GCP: ${currentConfig.gcp_project_id}`;
+          modeBadge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 text-xs font-medium';
+        }
+      } catch (err) {
+        console.error('Config fetch failed:', err);
+      }
+    }
+
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/admin/stats');
+        const stats = await res.json();
+        document.getElementById('stat-total').innerText = stats.total_videos;
+        document.getElementById('stat-indexed').innerText = stats.indexed_videos;
+        document.getElementById('stat-db-name').innerText = stats.spanner_database;
+        document.getElementById('stat-instance-name').innerText = stats.spanner_instance;
+      } catch (err) {
+        console.error('Stats fetch failed:', err);
+      }
+    }
+
+    let activeCategoryTags = null;
+
+    function filterCategory(cat, btn) {
+      document.querySelectorAll('.cat-pill').forEach(p => {
+        p.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition';
+      });
+      if (btn) btn.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+
+      if (cat === 'all') {
+        activeCategoryTags = null;
+        document.getElementById('search-query').value = '';
+        executeSearch(false);
+      } else {
+        activeCategoryTags = cat.split(',');
+        const firstTag = activeCategoryTags[0];
+        document.getElementById('search-query').value = firstTag;
+        executeSearch(true);
+      }
+    }
+
+    function setQuery(text) {
+      // Clear category tag restriction when clicking sample query
+      activeCategoryTags = null;
+      document.querySelectorAll('.cat-pill').forEach(p => {
+        p.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition';
+      });
+      const allPill = document.querySelector('.cat-pill');
+      if (allPill) allPill.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+      
+      const input = document.getElementById('search-query');
+      input.value = text;
+      executeSearch(false);
+    }
+
+    function handleSearch(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      // When searching via search bar directly, clear restrictive category filter
+      activeCategoryTags = null;
+      document.querySelectorAll('.cat-pill').forEach(p => {
+        p.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition';
+      });
+      const allPill = document.querySelector('.cat-pill');
+      if (allPill) allPill.className = 'cat-pill px-3 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+      
+      executeSearch(false);
+    }
+
+    async function executeSearch(useFilter) {
+      const query = document.getElementById('search-query').value.trim() || 'video';
+
+      const topK = parseInt(document.getElementById('top-k-select').value);
+      const minSim = parseFloat(document.getElementById('similarity-threshold').value) / 100.0;
+      const searchBtn = document.getElementById('search-btn');
+      const metricsBox = document.getElementById('search-metrics');
+
+      searchBtn.disabled = true;
+      searchBtn.innerHTML = `<span class="animate-spin mr-1">⚡</span> Searching...`;
+
+      try {
+        const payload = {
+          query,
+          top_k: topK,
+          min_similarity: minSim,
+          tags: activeCategoryTags
+        };
+        const res = await fetch('/api/user/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderSearchResults(data);
+      } catch (err) {
+        alert('Search request failed: ' + err.message);
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.innerHTML = `<span>Search</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+        lucide.createIcons();
+      }
+    }
+
+    let lastParamQuery = "";
+    let lastStudioQuery = "";
+    let currentSqlView = "studio";
+
+    function toggleSqlView(view) {
+      currentSqlView = view;
+      const sqlText = document.getElementById('spanner-sql-text');
+      const btnStudio = document.getElementById('btn-view-studio');
+      const btnParam = document.getElementById('btn-view-param');
+
+      if (view === 'studio') {
+        if (sqlText) sqlText.innerText = lastStudioQuery || lastParamQuery;
+        if (btnStudio) btnStudio.className = "px-3 py-1 rounded-md text-xs font-semibold bg-indigo-600 text-white transition shadow";
+        if (btnParam) btnParam.className = "px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition";
+      } else {
+        if (sqlText) sqlText.innerText = lastParamQuery;
+        if (btnParam) btnParam.className = "px-3 py-1 rounded-md text-xs font-semibold bg-indigo-600 text-white transition shadow";
+        if (btnStudio) btnStudio.className = "px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 transition";
+      }
+    }
+
+    function copySpannerStudioQuery() {
+      const textToCopy = lastStudioQuery || lastParamQuery;
+      if (!textToCopy) return;
+      navigator.clipboard.writeText(textToCopy);
+      const btnText = document.getElementById('copy-studio-btn-text');
+      if (btnText) {
+        btnText.innerText = 'Copied to Clipboard!';
+        setTimeout(() => { if (btnText) btnText.innerText = 'Copy Full Query'; }, 2500);
+      }
+    }
+
+    function renderSearchResults(data) {
+      const grid = document.getElementById('results-grid');
+      const emptyState = document.getElementById('empty-state');
+      const metricsBox = document.getElementById('search-metrics');
+      const queryBox = document.getElementById('spanner-query-box');
+      const sqlText = document.getElementById('spanner-sql-text');
+      const vectorPreview = document.getElementById('sql-query-vector-preview');
+      const targetDb = document.getElementById('sql-target-db');
+
+      // Populate Live Spanner Query Box safely
+      if (data.spanner_sql_query || data.spanner_standalone_sql) {
+        lastParamQuery = data.spanner_sql_query || "";
+        lastStudioQuery = data.spanner_standalone_sql || data.spanner_sql_query || "";
+        
+        if (sqlText) {
+          sqlText.innerText = currentSqlView === 'studio' ? lastStudioQuery : lastParamQuery;
+        }
+        if (queryBox) {
+          queryBox.classList.remove('hidden');
+        }
+        if (vectorPreview && data.query_vector_preview) {
+          vectorPreview.innerText = `[${data.query_vector_preview.map(x => x.toFixed(4)).join(', ')}, ... 1408 floats]`;
+        }
+        if (targetDb && data.spanner_params && data.spanner_params.database) {
+          targetDb.innerText = data.spanner_params.database;
+        }
+        
+        const spannerLatencyVal = document.getElementById('spanner-latency-val');
+        if (spannerLatencyVal) {
+          spannerLatencyVal.innerText = `${data.spanner_latency_ms || 0}ms`;
+        }
+      }
+
+      if (metricsBox) {
+        const spannerMs = data.spanner_latency_ms !== undefined ? data.spanner_latency_ms : (data.execution_time_ms || 0);
+        const embMs = data.embedding_latency_ms || 0;
+        const totalMs = data.execution_time_ms || 0;
+
+        metricsBox.innerHTML = `
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="text-indigo-400 font-bold flex items-center space-x-1">
+              <i data-lucide="video" class="w-3.5 h-3.5 inline"></i>
+              <span>${data.total_found || 0} Videos Ranked</span>
+            </span>
+            <span class="text-slate-600 font-bold">•</span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-semibold flex items-center space-x-1.5 shadow-sm">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>⚡ Spanner DB Query: <span class="font-mono text-emerald-200 font-bold">${spannerMs}ms</span></span>
+            </span>
+            <span class="text-slate-600 font-bold">•</span>
+            <span class="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium">
+              🧠 Vertex AI: <span class="font-mono text-indigo-300 font-bold">${embMs}ms</span>
+            </span>
+            <span class="text-slate-600 font-bold">•</span>
+            <span class="text-slate-400 text-xs">
+              Total End-to-End: <span class="font-mono text-slate-200 font-semibold">${totalMs}ms</span>
+            </span>
+          </div>
+        `;
+        if (window.lucide) {
+          lucide.createIcons();
+        }
+      }
+
+      if (!data.results || data.results.length === 0) {
+        grid.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      grid.innerHTML = data.results.map((video, idx) => {
+        const simPct = Math.round((video.similarity_score || 0) * 100);
+        let badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+        if (simPct < 60) badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        if (simPct < 35) badgeColor = 'bg-slate-700 text-slate-300 border-slate-600';
+
+        const tagBadges = (video.tags || []).slice(0, 3).map(t => 
+          `<span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">#${t}</span>`
+        ).join(' ');
+
+        return `
+          <div class="bg-slate-900/90 rounded-2xl border border-slate-800 overflow-hidden hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all flex flex-col group">
+            <!-- Video Thumbnail / Player -->
+            <div class="relative aspect-video bg-black overflow-hidden group-hover:opacity-95 transition">
+              <video src="${video.video_url || ''}${video.video_url && video.video_url.includes('?') ? '&' : '?'}t=2" preload="metadata" class="w-full h-full object-cover"></video>
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-black/30 pointer-events-none"></div>
+              
+              <!-- Rank & Score Badges -->
+              <div class="absolute top-2 left-2 flex items-center space-x-1.5">
+                <span class="px-2 py-0.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow">
+                  #${idx + 1}
+                </span>
+                <span class="px-2 py-0.5 rounded-lg text-xs font-semibold border ${badgeColor} backdrop-blur-md">
+                  ${simPct}% Match
+                </span>
+              </div>
+
+              <!-- Play Action Overlay -->
+              <button 
+                onclick="openVideoModal('${video.video_url}', '${encodeURIComponent(video.title)}', '${video.gcs_uri}')" 
+                class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <div class="w-12 h-12 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition">
+                  <i data-lucide="play" class="w-6 h-6 ml-0.5 fill-current"></i>
+                </div>
+              </button>
+
+              <span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] font-mono text-slate-300">
+                ${video.duration_seconds || 0}s
+              </span>
+            </div>
+
+            <!-- Card Content -->
+            <div class="p-4 flex-grow flex flex-col justify-between space-y-3">
+              <div>
+                <h4 class="text-sm font-bold text-white line-clamp-1 group-hover:text-indigo-300 transition" title="${video.title}">
+                  ${video.title}
+                </h4>
+                <p class="text-xs text-slate-400 mt-1 line-clamp-2" title="${video.description}">
+                  ${video.description || 'No scene description provided.'}
+                </p>
+              </div>
+
+              <div class="space-y-2 pt-2 border-t border-slate-800">
+                <!-- Tag Pills -->
+                <div class="flex flex-wrap gap-1">
+                  ${tagBadges}
+                </div>
+
+                <!-- GCS Destination & Distance -->
+                <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                  <span class="truncate max-w-[160px]" title="${video.gcs_uri}">
+                    ${video.gcs_uri}
+                  </span>
+                  <span>Dist: ${(video.distance || 0).toFixed(3)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function handleFileSelected(input) {
+      if (input.files && input.files[0]) {
+        selectedFile = input.files[0];
+        document.getElementById('file-label-main').innerText = `Selected: ${selectedFile.name}`;
+        document.getElementById('file-label-sub').innerText = `${(selectedFile.size / (1024*1024)).toFixed(2)} MB • ${selectedFile.type || 'video/mp4'}`;
+        if (!document.getElementById('upload-title').value) {
+          const autoTitle = selectedFile.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+          document.getElementById('upload-title').value = autoTitle.charAt(0).toUpperCase() + autoTitle.slice(1);
+        }
+      }
+    }
+
+    async function handleUpload(e) {
+      e.preventDefault();
+      if (!selectedFile) {
+        alert('Please select a video file to upload.');
+        return;
+      }
+
+      const title = document.getElementById('upload-title').value;
+      const desc = document.getElementById('upload-desc').value;
+      const tags = document.getElementById('upload-tags').value;
+      const duration = document.getElementById('upload-duration').value;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('title', title);
+      formData.append('description', desc);
+      formData.append('tags', tags);
+      formData.append('duration_seconds', duration);
+
+      const submitBtn = document.getElementById('upload-submit-btn');
+      const statusBox = document.getElementById('upload-status-box');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Uploading to GCS...';
+      statusBox.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/admin/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        
+        document.getElementById('upload-status-title').innerText = 'Upload Succeeded & Ingestion Active';
+        document.getElementById('upload-status-desc').innerText = `Video ID: ${data.video_id}. Vertex AI embedding and Spanner storage in progress.`;
+
+        // Clear form
+        selectedFile = null;
+        document.getElementById('upload-form').reset();
+        document.getElementById('file-label-main').innerText = 'Click to browse or drag & drop video file';
+        document.getElementById('file-label-sub').innerText = 'Supports MP4, WebM, MOV (Max 100MB)';
+
+        setTimeout(() => {
+          fetchAdminVideos();
+          fetchStats();
+        }, 1200);
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4 mr-2"></i><span>Upload to GCS & Index to Spanner</span>`;
+        lucide.createIcons();
+      }
+    }
+
+    async function fetchAdminVideos() {
+      try {
+        const res = await fetch('/api/admin/videos');
+        const videos = await res.json();
+        const tbody = document.getElementById('admin-videos-tbody');
+        document.getElementById('admin-video-count-badge').innerText = `${videos.length} Videos`;
+
+        if (!videos || videos.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500">No videos in Cloud Spanner. Click "Seed Sample Videos" to populate.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = videos.map(v => {
+          let statusBadge = '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold text-[10px]">INDEXED</span>';
+          if (v.status === 'PROCESSING') statusBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold text-[10px] animate-pulse">PROCESSING</span>';
+          if (v.status === 'FAILED') statusBadge = '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-semibold text-[10px]">FAILED</span>';
+
+          const vecPreview = v.embedding_preview ? v.embedding_preview.map(x => x.toFixed(2)).join(', ') : 'Generated [1408 dims]';
+
+          return `
+            <tr class="hover:bg-slate-950/40 transition">
+              <td class="py-3 px-4">
+                <div class="flex items-center space-x-3">
+                  <button onclick="openVideoModal('${v.video_url}', '${encodeURIComponent(v.title)}', '${v.gcs_uri}')" class="w-10 h-10 rounded-lg bg-black shrink-0 overflow-hidden relative group">
+                    <video src="${v.video_url || ''}${v.video_url && v.video_url.includes('?') ? '&' : '?'}t=2" class="w-full h-full object-cover"></video>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition">
+                      <i data-lucide="play" class="w-4 h-4"></i>
+                    </div>
+                  </button>
+                  <div>
+                    <p class="font-semibold text-white line-clamp-1">${v.title}</p>
+                    <p class="text-[11px] text-slate-500 line-clamp-1">${v.description || 'No description'}</p>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3 px-4 font-mono text-slate-400 text-[11px]">
+                <span title="${v.gcs_uri}" class="truncate max-w-xs block">${v.gcs_uri}</span>
+              </td>
+              <td class="py-3 px-4 font-mono text-indigo-300 text-[10px]">
+                <span title="${vecPreview}" class="truncate max-w-[180px] block">[${vecPreview}...]</span>
+              </td>
+              <td class="py-3 px-4">
+                ${statusBadge}
+              </td>
+              <td class="py-3 px-4 text-right space-x-2">
+                <button onclick="reindexVideo('${v.video_id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" title="Re-generate Embedding">
+                  <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="deleteVideo('${v.video_id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-300" title="Delete Video">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Admin videos fetch failed:', err);
+      }
+    }
+
+    async function reindexVideo(id) {
+      try {
+        await fetch(`/api/admin/reindex/${id}`, { method: 'POST' });
+        alert('Re-indexing scheduled.');
+        setTimeout(fetchAdminVideos, 1000);
+      } catch (err) {
+        alert('Failed to re-index: ' + err.message);
+      }
+    }
+
+    async function deleteVideo(id) {
+      if (!confirm('Are you sure you want to delete this video from Cloud Spanner and GCS?')) return;
+      try {
+        await fetch(`/api/admin/videos/${id}`, { method: 'DELETE' });
+        fetchAdminVideos();
+        fetchStats();
+      } catch (err) {
+        alert('Delete failed: ' + err.message);
+      }
+    }
+
+    async function seedSampleVideosAction(showAlert = true) {
+      try {
+        const res = await fetch('/api/admin/seed-samples', { method: 'POST' });
+        const data = await res.json();
+        if (showAlert) alert(data.message);
+        setTimeout(() => {
+          fetchAdminVideos();
+          fetchStats();
+        }, 1000);
+      } catch (err) {
+        if (showAlert) alert('Seed failed: ' + err.message);
+      }
+    }
+
+    async function seedAndSearch() {
+      await seedSampleVideosAction(false);
+      setTimeout(() => {
+        setQuery('golden retriever puppy playing with ball');
+      }, 1000);
+    }
+
+    function openVideoModal(url, titleEnc, gcsUri) {
+      const modal = document.getElementById('video-modal');
+      const player = document.getElementById('modal-video-player');
+      const titleEl = document.getElementById('modal-video-title');
+      const gcsUriEl = document.getElementById('modal-gcs-uri');
+      const directLinkEl = document.getElementById('modal-direct-link');
+
+      if (titleEl) titleEl.innerText = decodeURIComponent(titleEnc || 'Video Preview');
+      if (gcsUriEl) gcsUriEl.innerText = gcsUri || url;
+      if (directLinkEl) directLinkEl.href = url;
+      
+      // Cache-busting URL to bypass any stale browser MP4 chunk caching
+      const freshUrl = url ? (url.includes('?') ? `${url}&t=${Date.now()}` : `${url}?t=${Date.now()}`) : '';
+
+      // Fallback mechanism: if direct GCS fails, fallback to backend proxy
+      player.onerror = () => {
+        if (url.startsWith('https://storage.googleapis.com/')) {
+          const filename = url.split('/').pop().split('?')[0];
+          const fallbackUrl = `/api/storage/videos/distinct_100/${filename}?t=${Date.now()}`;
+          console.warn('GCS direct stream failed, attempting proxy fallback:', fallbackUrl);
+          player.src = fallbackUrl;
+          player.load();
+          player.play().catch(err => console.error('Fallback playback error:', err));
+        }
+      };
+
+      player.src = freshUrl;
+      player.load();
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // Attempt autoplay, fallback to muted autoplay if browser blocks audio
+      player.play().catch(err => {
+        console.warn('Autoplay with audio blocked by browser policy, trying muted:', err);
+        player.muted = true;
+        player.play().catch(e => console.error('Playback failed:', e));
+      });
+    }
+
+    function closeVideoModal() {
+      const modal = document.getElementById('video-modal');
+      const player = document.getElementById('modal-video-player');
+      try {
+        player.pause();
+        player.currentTime = 0;
+        player.removeAttribute('src');
+        player.load();
+      } catch (e) {}
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function openConfigModal() {
+      if (currentConfig) {
+        document.getElementById('cfg-project').value = currentConfig.gcp_project_id;
+        document.getElementById('cfg-bucket').value = currentConfig.gcs_bucket_name;
+        document.getElementById('cfg-spanner-instance').value = currentConfig.spanner_instance_id;
+        document.getElementById('cfg-spanner-db').value = currentConfig.spanner_database_id;
+        document.getElementById('cfg-mock').checked = currentConfig.use_mock_gcp;
+      }
+      const modal = document.getElementById('config-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeConfigModal() {
+      const modal = document.getElementById('config-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function handleSaveConfig(e) {
+      e.preventDefault();
+      const payload = {
+        gcp_project_id: document.getElementById('cfg-project').value,
+        gcp_region: "us-central1",
+        gcs_bucket_name: document.getElementById('cfg-bucket').value,
+        spanner_instance_id: document.getElementById('cfg-spanner-instance').value,
+        spanner_database_id: document.getElementById('cfg-spanner-db').value,
+        spanner_table_name: "Videos",
+        embedding_model_name: "multimodalembedding@001",
+        embedding_dimension: 1408,
+        use_mock_gcp: document.getElementById('cfg-mock').checked
+      };
+
+      try {
+        await fetch('/api/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        closeConfigModal();
+        await fetchConfig();
+        await fetchStats();
+      } catch (err) {
+        alert('Failed to save config: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
